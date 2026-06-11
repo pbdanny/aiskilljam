@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bangkok Heavy Rainfall Dashboard</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://api.open-meteo.com" />
+    <link rel="preconnect" href="https://api.rainviewer.com" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Asia/Bangkok live monitor</p>
+          <h1>Bangkok Heavy Rainfall Dashboard</h1>
+        </div>
+        <div class="toolbar" aria-label="Dashboard controls">
+          <div class="status-pill" id="connectionStatus">Loading</div>
+          <button class="icon-button" id="refreshButton" type="button" aria-label="Refresh data" title="Refresh data">
+            <i data-lucide="refresh-cw"></i>
+          </button>
+          <button class="icon-button is-active" id="autoRefreshButton" type="button" aria-pressed="true" aria-label="Auto refresh" title="Auto refresh">
+            <i data-lucide="timer-reset"></i>
+          </button>
+          <label class="range-control" for="radarOpacity" title="Radar opacity">
+            <i data-lucide="layers-2" aria-hidden="true"></i>
+            <input id="radarOpacity" type="range" min="20" max="90" value="64" aria-label="Radar opacity" />
+          </label>
+        </div>
+      </header>
+
+      <main class="dashboard-grid">
+        <section class="map-panel" aria-label="Bangkok rainfall radar map">
+          <div id="map" class="rain-map">
+            <svg class="base-map" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <pattern id="mapGrid" width="80" height="80" patternUnits="userSpaceOnUse">
+                  <path d="M 80 0 L 0 0 0 80" class="map-grid-line" />
+                </pattern>
+              </defs>
+              <rect width="1000" height="680" class="map-ground" />
+              <rect width="1000" height="680" fill="url(#mapGrid)" opacity="0.42" />
+              <path class="map-river" d="M430 -30 C390 60 458 110 422 184 C381 267 468 324 424 398 C386 462 435 546 388 710" />
+              <path class="map-ring" d="M188 118 C326 34 614 28 785 150 C934 257 915 486 742 593 C548 713 279 650 156 505 C48 378 61 196 188 118 Z" />
+              <path class="map-road" d="M111 404 C272 350 424 333 600 340 C731 345 830 386 913 458" />
+              <path class="map-road" d="M255 95 C332 228 399 319 493 425 C575 517 660 581 786 642" />
+              <text x="620" y="116" class="map-label">Don Mueang</text>
+              <text x="385" y="260" class="map-label">Chatuchak</text>
+              <text x="320" y="375" class="map-label">Rattanakosin</text>
+              <text x="590" y="430" class="map-label">Bang Na</text>
+              <text x="780" y="322" class="map-label">Min Buri</text>
+              <text x="760" y="515" class="map-label">Lat Krabang</text>
+            </svg>
+            <img id="radarImage" class="radar-image" alt="" />
+            <svg id="stationOverlay" class="station-overlay" viewBox="0 0 1000 680" aria-label="Rainfall status by location"></svg>
+            <div class="map-tooltip" id="mapTooltip" hidden></div>
+          </div>
+          <div class="map-overlay">
+            <div>
+              <span class="meta-label">Radar frame</span>
+              <strong id="radarFrameTime">Loading</strong>
+            </div>
+            <button class="icon-button" id="radarPlayButton" type="button" aria-label="Animate radar" title="Animate radar">
+              <i data-lucide="play"></i>
+            </button>
+          </div>
+          <div class="radar-timeline" id="radarTimeline" aria-label="Radar frames"></div>
+        </section>
+
+        <section class="summary-panel" aria-label="Rainfall report">
+          <article class="alert-card" id="overallCard">
+            <div class="alert-topline">
+              <span class="meta-label">Area status</span>
+              <span id="lastUpdated">--</span>
+            </div>
+            <div class="alert-main">
+              <div>
+                <h2 id="overallStatus">Loading</h2>
+                <p id="overallDetail">Fetching rainfall conditions.</p>
+              </div>
+              <div class="risk-badge" id="overallRisk">--</div>
+            </div>
+          </article>
+
+          <div class="metric-grid" aria-label="Key rainfall metrics">
+            <article class="metric-card">
+              <span class="meta-label">Current max</span>
+              <strong id="currentMax">--</strong>
+              <small>mm</small>
+            </article>
+            <article class="metric-card">
+              <span class="meta-label">Next 3h max</span>
+              <strong id="next3Max">--</strong>
+              <small>mm</small>
+            </article>
+            <article class="metric-card">
+              <span class="meta-label">Affected points</span>
+              <strong id="affectedCount">--</strong>
+              <small>heavy+</small>
+            </article>
+            <article class="metric-card">
+              <span class="meta-label">Peak gust</span>
+              <strong id="peakGust">--</strong>
+              <small>km/h</small>
+            </article>
+          </div>
+
+          <div class="station-list" id="stationList" aria-label="Bangkok area rainfall locations"></div>
+        </section>
+
+        <section class="forecast-panel" aria-label="Twelve hour rainfall outlook">
+          <div class="section-heading">
+            <div>
+              <span class="meta-label">Outlook</span>
+              <h2>Next 12 hours</h2>
+            </div>
+            <span id="forecastRange">--</span>
+          </div>
+          <div class="chart-wrap">
+            <svg id="forecastChart" role="img" aria-label="Average and maximum rainfall forecast chart"></svg>
+          </div>
+        </section>
+      </main>
+
+      <footer class="source-row">
+        <span>Open-Meteo forecast model</span>
+        <span>RainViewer radar</span>
+        <span>Updated automatically every 10 minutes</span>
+      </footer>
+    </div>
+  </body>
+</html>

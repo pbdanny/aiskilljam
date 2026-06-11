@@ -1,0 +1,635 @@
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-strong: #101214;
+  --text: #171a1f;
+  --muted: #636b74;
+  --line: #dfe4ea;
+  --low: #2f855a;
+  --light: #24838f;
+  --moderate: #b57913;
+  --heavy: #c75000;
+  --severe: #b3261e;
+  --shadow: 0 18px 45px rgba(22, 29, 37, 0.12);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1480px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 20px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.eyebrow,
+.meta-label {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.55rem, 3vw, 2.6rem);
+  line-height: 1.03;
+  letter-spacing: 0;
+}
+
+h2 {
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-pill,
+.risk-badge {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.status-pill.is-live {
+  color: #0f6848;
+  border-color: rgba(47, 133, 90, 0.26);
+  background: rgba(47, 133, 90, 0.09);
+}
+
+.status-pill.is-error {
+  color: var(--severe);
+  border-color: rgba(179, 38, 30, 0.28);
+  background: rgba(179, 38, 30, 0.08);
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+  border-color: #b7c0ca;
+}
+
+.icon-button:focus-visible,
+.range-control input:focus-visible {
+  outline: 3px solid rgba(36, 131, 143, 0.28);
+  outline-offset: 2px;
+}
+
+.icon-button.is-active {
+  border-color: rgba(36, 131, 143, 0.34);
+  background: rgba(36, 131, 143, 0.1);
+  color: #176d76;
+}
+
+.icon-button svg,
+.range-control svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+
+.range-control {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.range-control input {
+  width: 98px;
+  accent-color: #24838f;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.85fr);
+  grid-template-areas:
+    "map summary"
+    "forecast summary";
+  gap: 16px;
+}
+
+.map-panel,
+.summary-panel,
+.forecast-panel {
+  min-width: 0;
+}
+
+.map-panel {
+  grid-area: map;
+  position: relative;
+  overflow: hidden;
+  min-height: 610px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #d7dde3;
+  box-shadow: var(--shadow);
+}
+
+#map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 610px;
+  z-index: 0;
+}
+
+.rain-map {
+  background: #e7edf1;
+}
+
+.base-map,
+.radar-image,
+.station-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.base-map {
+  z-index: 1;
+}
+
+.radar-image {
+  z-index: 2;
+  object-fit: cover;
+  opacity: 0.64;
+  mix-blend-mode: multiply;
+  transition: opacity 160ms ease;
+}
+
+.station-overlay {
+  z-index: 3;
+}
+
+.map-ground {
+  fill: #e5ebef;
+}
+
+.map-grid-line {
+  fill: none;
+  stroke: #c8d1d9;
+  stroke-width: 1;
+}
+
+.map-river {
+  fill: none;
+  stroke: rgba(36, 131, 143, 0.48);
+  stroke-width: 34;
+  stroke-linecap: round;
+}
+
+.map-ring,
+.map-road {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.map-ring {
+  stroke: rgba(54, 64, 74, 0.28);
+  stroke-width: 10;
+}
+
+.map-road {
+  stroke: rgba(54, 64, 74, 0.2);
+  stroke-width: 7;
+}
+
+.map-label {
+  fill: rgba(23, 26, 31, 0.44);
+  font-size: 23px;
+  font-weight: 780;
+}
+
+.station-marker {
+  cursor: pointer;
+}
+
+.station-marker circle {
+  stroke: #ffffff;
+  stroke-width: 4;
+  paint-order: stroke;
+  filter: drop-shadow(0 8px 12px rgba(18, 24, 31, 0.18));
+}
+
+.station-marker text {
+  fill: #1d242b;
+  font-size: 17px;
+  font-weight: 820;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.86);
+  stroke-width: 5px;
+  pointer-events: none;
+}
+
+.map-tooltip {
+  position: absolute;
+  z-index: 470;
+  min-width: 180px;
+  max-width: min(260px, calc(100% - 24px));
+  padding: 10px;
+  border: 1px solid rgba(223, 228, 234, 0.92);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px rgba(18, 24, 31, 0.16);
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.map-overlay {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 450;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 28px);
+  padding: 10px;
+  border: 1px solid rgba(223, 228, 234, 0.88);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 25px rgba(18, 24, 31, 0.13);
+}
+
+.map-overlay strong {
+  display: block;
+  min-width: 94px;
+  font-size: 0.94rem;
+}
+
+.radar-timeline {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 450;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(223, 228, 234, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 30px rgba(18, 24, 31, 0.13);
+}
+
+.timeline-button {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.timeline-button.is-active {
+  color: #0d5961;
+  border-color: rgba(36, 131, 143, 0.35);
+  background: rgba(36, 131, 143, 0.1);
+}
+
+.summary-panel {
+  grid-area: summary;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-card,
+.metric-card,
+.station-card,
+.forecast-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.alert-card {
+  padding: 18px;
+  color: #ffffff;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.alert-topline,
+.alert-main,
+.section-heading,
+.station-row,
+.station-meta,
+.source-row {
+  display: flex;
+  align-items: center;
+}
+
+.alert-topline,
+.section-heading,
+.source-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alert-topline {
+  margin-bottom: 18px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.82rem;
+}
+
+.alert-card .meta-label {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.alert-main {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.alert-main h2 {
+  margin-bottom: 8px;
+  font-size: clamp(1.65rem, 3.5vw, 2.65rem);
+  line-height: 0.98;
+}
+
+.alert-main p {
+  max-width: 46ch;
+  color: rgba(255, 255, 255, 0.74);
+  line-height: 1.45;
+}
+
+.risk-badge {
+  min-width: 98px;
+  min-height: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 1.08rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric-card {
+  min-height: 116px;
+  padding: 15px;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 12px;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.metric-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-weight: 720;
+}
+
+.station-list {
+  display: grid;
+  gap: 8px;
+}
+
+.station-card {
+  padding: 12px;
+}
+
+.station-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.station-name {
+  min-width: 0;
+  font-weight: 790;
+  overflow-wrap: anywhere;
+}
+
+.station-meta {
+  margin-top: 9px;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.station-risk {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.forecast-panel {
+  grid-area: forecast;
+  padding: 18px;
+  min-height: 258px;
+}
+
+.section-heading {
+  margin-bottom: 14px;
+}
+
+.section-heading > span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.chart-wrap {
+  width: 100%;
+  min-height: 188px;
+}
+
+#forecastChart {
+  width: 100%;
+  height: 188px;
+  display: block;
+}
+
+.chart-axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chart-bar-avg {
+  fill: rgba(36, 131, 143, 0.82);
+}
+
+.chart-bar-max {
+  fill: rgba(199, 80, 0, 0.78);
+}
+
+.chart-grid {
+  stroke: #e5e9ee;
+  stroke-width: 1;
+}
+
+.source-row {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  flex-wrap: wrap;
+}
+
+.popup-title {
+  margin-bottom: 7px;
+  font-weight: 800;
+}
+
+.popup-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 5px 12px;
+  color: #3d454d;
+  font-size: 0.83rem;
+}
+
+@media (max-width: 1020px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "summary"
+      "map"
+      "forecast";
+  }
+
+  .map-panel,
+  #map {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    width: min(100vw - 20px, 680px);
+    padding-top: 14px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .toolbar {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .status-pill {
+    order: 5;
+    width: 100%;
+  }
+
+  .range-control {
+    flex: 1;
+    min-width: 168px;
+  }
+
+  .range-control input {
+    width: 100%;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .risk-badge {
+    min-height: 42px;
+  }
+
+  .map-panel,
+  #map {
+    min-height: 470px;
+  }
+
+  .radar-timeline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
