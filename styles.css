@@ -229,6 +229,7 @@ h2 {
 .base-map,
 .online-map,
 .radar-image,
+.rain-heatmap,
 .station-overlay {
   position: absolute;
   inset: 0;
@@ -271,8 +272,23 @@ h2 {
   z-index: 1;
 }
 
-.station-overlay {
+.rain-heatmap {
   z-index: 4;
+  opacity: 0.82;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.heatmap-core {
+  filter: blur(18px);
+}
+
+.heatmap-halo {
+  filter: blur(34px);
+}
+
+.station-overlay {
+  z-index: 5;
 }
 
 .map-ground {

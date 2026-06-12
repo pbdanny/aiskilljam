@@ -36,7 +36,7 @@
 
       <main class="dashboard-grid">
         <section class="map-panel" aria-label="Bangkok rainfall radar map">
-          <div id="map" class="rain-map" tabindex="0" aria-label="Interactive Bangkok rainfall map" title="Drag to pan map">
+          <div id="map" class="rain-map" tabindex="0" aria-label="Interactive Bangkok rainfall heatmap" title="Drag, wheel, or double-click to explore rainfall">
             <svg class="base-map" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden="true">
               <defs>
                 <pattern id="mapGrid" width="80" height="80" patternUnits="userSpaceOnUse">
@@ -58,21 +58,22 @@
             </svg>
             <div id="onlineMap" class="online-map" aria-hidden="true"></div>
             <div id="radarImage" class="radar-image" aria-hidden="true"></div>
+            <svg id="rainHeatmap" class="rain-heatmap" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden="true"></svg>
             <svg id="stationOverlay" class="station-overlay" viewBox="0 0 1000 680" aria-label="Rainfall status by location"></svg>
             <div class="map-tooltip" id="mapTooltip" hidden></div>
           </div>
-          <div class="map-zoom-controls" aria-label="Map zoom controls">
-            <button class="icon-button" id="mapZoomIn" type="button" aria-label="Zoom map in" title="Zoom map in">
+          <div class="map-zoom-controls" aria-label="Map and heatmap controls">
+            <button class="icon-button" id="mapZoomIn" type="button" aria-label="Zoom rainfall heatmap in" title="Zoom rainfall heatmap in">
               <i data-lucide="plus"></i>
             </button>
             <span class="map-zoom-level" id="mapZoomLevel" aria-live="polite">1x</span>
-            <button class="icon-button" id="mapZoomOut" type="button" aria-label="Zoom map out" title="Zoom map out">
+            <button class="icon-button" id="mapZoomOut" type="button" aria-label="Zoom rainfall heatmap out" title="Zoom rainfall heatmap out">
               <i data-lucide="minus"></i>
             </button>
-            <button class="icon-button" id="mapZoomReset" type="button" aria-label="Reset map zoom" title="Reset map zoom">
+            <button class="icon-button" id="mapZoomReset" type="button" aria-label="Reset rainfall heatmap view" title="Reset rainfall heatmap view">
               <i data-lucide="rotate-ccw"></i>
             </button>
-            <div class="map-pan-controls" aria-label="Map pan controls">
+            <div class="map-pan-controls" aria-label="Heatmap pan controls">
               <span></span>
               <button class="icon-button" id="mapPanUp" type="button" aria-label="Pan map north" title="Pan map north">
                 <i data-lucide="arrow-up"></i>

@@ -34,6 +34,7 @@ const MAP_ZOOM_MAX = 3;
 const MAP_PAN_BUTTON_FRACTION = 0.24;
 const MAP_COORD_EPSILON = 0.000001;
 const WEB_MERCATOR_TILE_SIZE = 256;
+const HEATMAP_BASE_RADIUS = 42;
 const BASE_ONLINE_MAP_ZOOM = 11;
 const RADAR_TILE_SIZE = 512;
 const BASE_RADAR_ZOOM = 7;
@@ -60,6 +61,7 @@ const els = {
   mapPanRight: document.querySelector("#mapPanRight"),
   onlineMap: document.querySelector("#onlineMap"),
   radarImage: document.querySelector("#radarImage"),
+  rainHeatmap: document.querySelector("#rainHeatmap"),
   stationOverlay: document.querySelector("#stationOverlay"),
   mapTooltip: document.querySelector("#mapTooltip"),
   overallCard: document.querySelector("#overallCard"),
@@ -77,6 +79,7 @@ const els = {
 };
 
 let markers = new Map();
+let weatherReports = [];
 let radarFrames = [];
 let radarHost = "https://tilecache.rainviewer.com";
 let radarFrameIndex = 0;
@@ -294,6 +297,7 @@ function setMapCenter(nextCenter) {
 
 function updateMapView() {
   renderMapLayers();
+  renderRainHeatmap(weatherReports);
   updateMarkerPositions();
   updateMapZoomControls();
   hideMapTooltip();
@@ -508,6 +512,7 @@ function classifyRisk({ currentPrecip, next3Total, next6Total, maxHour, maxProba
 }
 
 function renderWeather(reports) {
+  weatherReports = reports;
   const sorted = [...reports].sort((a, b) => b.risk.rank - a.risk.rank || b.next3Total - a.next3Total);
   const top = sorted[0];
   const currentMax = Math.max(...reports.map((report) => report.currentPrecip));
@@ -527,6 +532,7 @@ function renderWeather(reports) {
   els.lastUpdated.textContent = formatBangkokTime(new Date(), { hour: "2-digit", minute: "2-digit" });
 
   renderStations(sorted);
+  renderRainHeatmap(reports);
   renderMarkers(reports);
   renderForecastChart(reports);
 }
@@ -567,6 +573,62 @@ function renderStations(reports) {
       return article;
     })
   );
+}
+
+function renderRainHeatmap(reports) {
+  if (!reports.length) {
+    els.rainHeatmap.replaceChildren();
+    return;
+  }
+
+  const activeReports = reports
+    .filter((report) => Math.max(report.currentPrecip, report.next3Total, report.maxHour) > 0 || report.risk.rank > RISK.low.rank)
+    .sort((a, b) => a.risk.rank - b.risk.rank || a.next3Total - b.next3Total);
+
+  if (!activeReports.length) {
+    els.rainHeatmap.replaceChildren();
+    return;
+  }
+
+  const heatNodes = activeReports.flatMap((report) => {
+    const point = projectLocation(report);
+    if (!point.visible) {
+      return [];
+    }
+
+    const radius = getHeatmapRadius(report);
+    const opacity = getHeatmapOpacity(report);
+    return [
+      svgEl("circle", {
+        class: "heatmap-halo",
+        cx: point.x,
+        cy: point.y,
+        r: radius * 1.55,
+        fill: report.risk.color,
+        opacity: opacity * 0.34
+      }),
+      svgEl("circle", {
+        class: "heatmap-core",
+        cx: point.x,
+        cy: point.y,
+        r: radius,
+        fill: report.risk.color,
+        opacity
+      })
+    ];
+  });
+
+  els.rainHeatmap.replaceChildren(...heatNodes);
+}
+
+function getHeatmapRadius(report) {
+  const intensity = Math.max(report.currentPrecip * 1.5, report.next3Total, report.maxHour * 2);
+  const radius = HEATMAP_BASE_RADIUS + report.risk.rank * 20 + Math.min(74, intensity * 2.1);
+  return radius * Math.sqrt(getMapZoomScale());
+}
+
+function getHeatmapOpacity(report) {
+  return Math.min(0.58, 0.12 + report.risk.rank * 0.08 + report.next3Total / 90 + report.currentPrecip / 70);
 }
 
 function renderMarkers(reports) {
@@ -771,6 +833,7 @@ function renderWeatherError() {
 }
 
 function clearWeatherViews() {
+  weatherReports = [];
   els.overallRisk.textContent = "--";
   els.overallRisk.style.background = "rgba(255, 255, 255, 0.1)";
   els.overallCard.style.borderColor = "";
@@ -780,6 +843,7 @@ function clearWeatherViews() {
   els.affectedCount.textContent = "--";
   els.peakGust.textContent = "--";
   els.stationList.replaceChildren(createUnavailableStationCard());
+  els.rainHeatmap.replaceChildren();
   els.forecastChart.replaceChildren();
   els.forecastRange.textContent = "--";
   markers.forEach((marker, name) => {
