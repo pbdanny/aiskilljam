@@ -154,6 +154,7 @@ function bindControls() {
   els.map.addEventListener("pointerup", endMapPan);
   els.map.addEventListener("pointercancel", endMapPan);
   els.map.addEventListener("keydown", handleMapKeydown);
+  els.map.addEventListener("dblclick", handleMapDoubleClick);
   els.map.addEventListener("wheel", handleMapWheel, { passive: false });
 }
 
@@ -221,12 +222,17 @@ function handleMapWheel(event) {
   }
 
   event.preventDefault();
-  setMapZoom(mapZoomLevel + (event.deltaY < 0 ? 1 : -1));
+  setMapZoom(mapZoomLevel + (event.deltaY < 0 ? 1 : -1), getMapAnchorPoint(event));
 }
 
-function setMapZoom(nextZoomLevel) {
+function handleMapDoubleClick(event) {
+  event.preventDefault();
+  setMapZoom(mapZoomLevel + 1, getMapAnchorPoint(event));
+}
+
+function setMapZoom(nextZoomLevel, anchorPoint) {
   const clampedZoom = Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, nextZoomLevel));
-  const nextCenter = clampMapCenter(mapCenter, clampedZoom);
+  const nextCenter = anchorPoint ? getAnchoredZoomCenter(anchorPoint, clampedZoom) : clampMapCenter(mapCenter, clampedZoom);
   const zoomChanged = clampedZoom !== mapZoomLevel;
   const centerChanged = hasMapCenterChanged(nextCenter, mapCenter);
 
@@ -291,6 +297,33 @@ function updateMapView() {
   updateMarkerPositions();
   updateMapZoomControls();
   hideMapTooltip();
+}
+
+function getMapAnchorPoint(event) {
+  const mapRect = els.map.getBoundingClientRect();
+
+  return {
+    x: (event.clientX - mapRect.left) / mapRect.width,
+    y: (event.clientY - mapRect.top) / mapRect.height
+  };
+}
+
+function getAnchoredZoomCenter(anchorPoint, targetZoomLevel) {
+  const currentProjection = getMapProjection(getCurrentMapBounds(), getOnlineMapZoom());
+  const anchorWorld = {
+    x: currentProjection.west + anchorPoint.x * currentProjection.width,
+    y: currentProjection.north + anchorPoint.y * currentProjection.height
+  };
+  const anchorLocation = worldPixelToLonLat(anchorWorld, getOnlineMapZoom());
+  const targetZoom = getOnlineMapZoom(targetZoomLevel);
+  const targetAnchorWorld = lonLatToWorldPixel(anchorLocation, targetZoom);
+  const targetProjection = getMapProjection(getMapBoundsForCenter(mapCenter, targetZoomLevel), targetZoom);
+  const targetCenterWorld = {
+    x: targetAnchorWorld.x - (anchorPoint.x - 0.5) * targetProjection.width,
+    y: targetAnchorWorld.y - (anchorPoint.y - 0.5) * targetProjection.height
+  };
+
+  return clampMapCenter(worldPixelToLonLat(targetCenterWorld, targetZoom), targetZoomLevel);
 }
 
 function renderMapLayers() {
@@ -901,12 +934,12 @@ function getMapZoomScale(zoomLevel = mapZoomLevel) {
   return MAP_ZOOM_FACTOR ** zoomLevel;
 }
 
-function getOnlineMapZoom() {
-  return BASE_ONLINE_MAP_ZOOM + mapZoomLevel;
+function getOnlineMapZoom(zoomLevel = mapZoomLevel) {
+  return BASE_ONLINE_MAP_ZOOM + zoomLevel;
 }
 
-function getRadarMapZoom() {
-  return BASE_RADAR_ZOOM + mapZoomLevel;
+function getRadarMapZoom(zoomLevel = mapZoomLevel) {
+  return BASE_RADAR_ZOOM + zoomLevel;
 }
 
 function lonLatToTile(location, zoom) {
