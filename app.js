@@ -22,6 +22,15 @@ const RISK = {
 
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const RADAR_ANIMATION_MS = 700;
+const MAP_BOUNDS = { north: 14.07, south: 13.55, west: 100.36, east: 100.86 };
+const MAP_VIEWBOX = { width: 1000, height: 680 };
+const WEB_MERCATOR_TILE_SIZE = 256;
+const ONLINE_MAP_ZOOM = 11;
+const RADAR_TILE_SIZE = 512;
+const RADAR_ZOOM = 7;
+const RADAR_COLOR_SCHEME = 2;
+const RADAR_OPTIONS = "1_1";
+const MARKER_UNAVAILABLE_COLOR = "#636b74";
 
 const els = {
   connectionStatus: document.querySelector("#connectionStatus"),
@@ -31,6 +40,7 @@ const els = {
   radarPlayButton: document.querySelector("#radarPlayButton"),
   radarFrameTime: document.querySelector("#radarFrameTime"),
   radarTimeline: document.querySelector("#radarTimeline"),
+  onlineMap: document.querySelector("#onlineMap"),
   radarImage: document.querySelector("#radarImage"),
   stationOverlay: document.querySelector("#stationOverlay"),
   mapTooltip: document.querySelector("#mapTooltip"),
@@ -58,6 +68,7 @@ let radarAnimationTimer;
 
 document.addEventListener("DOMContentLoaded", () => {
   window.lucide?.createIcons();
+  renderOnlineMap();
   initMap();
   bindControls();
   refreshAll();
@@ -127,9 +138,9 @@ async function refreshAll() {
   } catch (error) {
     console.error(error);
     setStatus("Data error", "error");
+    clearWeatherViews();
     els.overallStatus.textContent = "Data unavailable";
     els.overallDetail.textContent = "Live rainfall sources could not be reached from this browser.";
-    els.overallRisk.textContent = "--";
   } finally {
     els.refreshButton.classList.remove("is-active");
   }
@@ -426,7 +437,7 @@ function setRadarFrame(index) {
     return;
   }
 
-  els.radarImage.src = `${radarHost}${frame.path}/512/7/13.7563/100.59/2/1_1.png`;
+  renderRadarTiles(frame);
   els.radarImage.style.opacity = String(Number(els.radarOpacity.value) / 100);
   radarFrameIndex = index;
   els.radarFrameTime.textContent = formatBangkokTime(new Date(frame.time * 1000), {
@@ -514,23 +525,144 @@ function setStatus(text, state) {
 }
 
 function renderWeatherError() {
+  clearWeatherViews();
   els.overallStatus.textContent = "Forecast unavailable";
   els.overallDetail.textContent = "Radar frames are available, but the rainfall forecast source could not be reached.";
+}
+
+function clearWeatherViews() {
   els.overallRisk.textContent = "--";
   els.overallRisk.style.background = "rgba(255, 255, 255, 0.1)";
+  els.overallCard.style.borderColor = "";
+  els.lastUpdated.textContent = "--";
   els.currentMax.textContent = "--";
   els.next3Max.textContent = "--";
   els.affectedCount.textContent = "--";
   els.peakGust.textContent = "--";
+  els.stationList.replaceChildren(createUnavailableStationCard());
+  els.forecastChart.replaceChildren();
+  els.forecastRange.textContent = "--";
+  markers.forEach((marker, name) => {
+    marker.report = null;
+    marker.circle.setAttribute("r", "10");
+    marker.circle.setAttribute("fill", MARKER_UNAVAILABLE_COLOR);
+    marker.title.textContent = `${name}: forecast unavailable`;
+  });
+  hideMapTooltip();
+}
+
+function createUnavailableStationCard() {
+  const article = document.createElement("article");
+  article.className = "station-card";
+  article.innerHTML = `
+    <div class="station-row">
+      <div class="station-name">Forecast unavailable</div>
+      <div class="station-risk" style="background:${MARKER_UNAVAILABLE_COLOR}">--</div>
+    </div>
+    <div class="station-meta">
+      <span>Open-Meteo request failed</span>
+    </div>
+  `;
+  return article;
+}
+
+function renderOnlineMap() {
+  els.onlineMap.replaceChildren(
+    ...createMapTiles(ONLINE_MAP_ZOOM, "map-tile", (x, y) => (
+      `https://tile.openstreetmap.org/${ONLINE_MAP_ZOOM}/${x}/${y}.png`
+    ))
+  );
+}
+
+function renderRadarTiles(frame) {
+  els.radarImage.replaceChildren(
+    ...createMapTiles(RADAR_ZOOM, "radar-tile", (x, y) => (
+      `${radarHost}${frame.path}/${RADAR_TILE_SIZE}/${RADAR_ZOOM}/${x}/${y}/${RADAR_COLOR_SCHEME}/${RADAR_OPTIONS}.png`
+    ))
+  );
+}
+
+function createMapTiles(zoom, className, getSource) {
+  const projection = getMapProjection(zoom);
+  const northWestTile = lonLatToTile({ lat: MAP_BOUNDS.north, lon: MAP_BOUNDS.west }, zoom);
+  const southEastTile = lonLatToTile({ lat: MAP_BOUNDS.south, lon: MAP_BOUNDS.east }, zoom);
+  const tiles = [];
+
+  for (let y = northWestTile.y; y <= southEastTile.y; y += 1) {
+    for (let x = northWestTile.x; x <= southEastTile.x; x += 1) {
+      const image = new Image();
+      image.alt = "";
+      image.decoding = "async";
+      image.draggable = false;
+      image.loading = className === "map-tile" ? "lazy" : "eager";
+      image.className = className;
+      image.src = getSource(x, y);
+      positionMapTile(image, x, y, projection);
+      tiles.push(image);
+    }
+  }
+
+  return tiles;
+}
+
+function positionMapTile(image, tileX, tileY, projection) {
+  const left = ((tileX * WEB_MERCATOR_TILE_SIZE - projection.west) / projection.width) * 100;
+  const top = ((tileY * WEB_MERCATOR_TILE_SIZE - projection.north) / projection.height) * 100;
+  const width = (WEB_MERCATOR_TILE_SIZE / projection.width) * 100;
+  const height = (WEB_MERCATOR_TILE_SIZE / projection.height) * 100;
+
+  image.style.left = `${left}%`;
+  image.style.top = `${top}%`;
+  image.style.width = `calc(${width}% + 1px)`;
+  image.style.height = `calc(${height}% + 1px)`;
+}
+
+function getMapProjection(zoom) {
+  const northWest = lonLatToWorldPixel({ lat: MAP_BOUNDS.north, lon: MAP_BOUNDS.west }, zoom);
+  const southEast = lonLatToWorldPixel({ lat: MAP_BOUNDS.south, lon: MAP_BOUNDS.east }, zoom);
+
+  return {
+    west: northWest.x,
+    north: northWest.y,
+    east: southEast.x,
+    south: southEast.y,
+    width: southEast.x - northWest.x,
+    height: southEast.y - northWest.y
+  };
 }
 
 function projectLocation(location) {
-  const bounds = { north: 14.07, south: 13.55, west: 100.36, east: 100.86 };
-  const x = ((location.lon - bounds.west) / (bounds.east - bounds.west)) * 1000;
-  const y = ((bounds.north - location.lat) / (bounds.north - bounds.south)) * 680;
+  const projection = getMapProjection(ONLINE_MAP_ZOOM);
+  const point = lonLatToWorldPixel(location, ONLINE_MAP_ZOOM);
+  const x = ((point.x - projection.west) / projection.width) * MAP_VIEWBOX.width;
+  const y = ((point.y - projection.north) / projection.height) * MAP_VIEWBOX.height;
+
   return {
-    x: Math.max(48, Math.min(952, x)),
-    y: Math.max(48, Math.min(632, y))
+    x: Math.max(48, Math.min(MAP_VIEWBOX.width - 48, x)),
+    y: Math.max(48, Math.min(MAP_VIEWBOX.height - 48, y))
+  };
+}
+
+function lonLatToTile(location, zoom) {
+  const point = lonLatToWorldPixel(location, zoom);
+  const tileCount = 2 ** zoom;
+
+  return {
+    x: Math.max(0, Math.min(tileCount - 1, Math.floor(point.x / WEB_MERCATOR_TILE_SIZE))),
+    y: Math.max(0, Math.min(tileCount - 1, Math.floor(point.y / WEB_MERCATOR_TILE_SIZE)))
+  };
+}
+
+function lonLatToWorldPixel(location, zoom) {
+  const maxLatitude = 85.05112878;
+  const latitude = Math.max(-maxLatitude, Math.min(maxLatitude, location.lat));
+  const latitudeRadians = (latitude * Math.PI) / 180;
+  const scale = WEB_MERCATOR_TILE_SIZE * 2 ** zoom;
+  const sinLatitude = Math.sin(latitudeRadians);
+
+  return {
+    x: ((location.lon + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * scale
   };
 }
 
@@ -550,8 +682,8 @@ function showMapTooltip(marker) {
     </div>
   `;
   const mapRect = document.querySelector("#map").getBoundingClientRect();
-  const left = (marker.point.x / 1000) * mapRect.width;
-  const top = (marker.point.y / 680) * mapRect.height;
+  const left = (marker.point.x / MAP_VIEWBOX.width) * mapRect.width;
+  const top = (marker.point.y / MAP_VIEWBOX.height) * mapRect.height;
   els.mapTooltip.style.left = `${Math.min(Math.max(12, left + 18), mapRect.width - 278)}px`;
   els.mapTooltip.style.top = `${Math.min(Math.max(12, top - 8), mapRect.height - 142)}px`;
   els.mapTooltip.hidden = false;
