@@ -22,12 +22,19 @@ const RISK = {
 
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const RADAR_ANIMATION_MS = 700;
-const MAP_BOUNDS = { north: 14.07, south: 13.55, west: 100.36, east: 100.86 };
+const DEFAULT_MAP_BOUNDS = { north: 14.07, south: 13.55, west: 100.36, east: 100.86 };
+const MAP_CENTER = {
+  lat: (DEFAULT_MAP_BOUNDS.north + DEFAULT_MAP_BOUNDS.south) / 2,
+  lon: (DEFAULT_MAP_BOUNDS.west + DEFAULT_MAP_BOUNDS.east) / 2
+};
 const MAP_VIEWBOX = { width: 1000, height: 680 };
+const MAP_ZOOM_FACTOR = 1.7;
+const MAP_ZOOM_MIN = 0;
+const MAP_ZOOM_MAX = 3;
 const WEB_MERCATOR_TILE_SIZE = 256;
-const ONLINE_MAP_ZOOM = 11;
+const BASE_ONLINE_MAP_ZOOM = 11;
 const RADAR_TILE_SIZE = 512;
-const RADAR_ZOOM = 7;
+const BASE_RADAR_ZOOM = 7;
 const RADAR_COLOR_SCHEME = 2;
 const RADAR_OPTIONS = "1_1";
 const MARKER_UNAVAILABLE_COLOR = "#636b74";
@@ -40,6 +47,11 @@ const els = {
   radarPlayButton: document.querySelector("#radarPlayButton"),
   radarFrameTime: document.querySelector("#radarFrameTime"),
   radarTimeline: document.querySelector("#radarTimeline"),
+  map: document.querySelector("#map"),
+  mapZoomIn: document.querySelector("#mapZoomIn"),
+  mapZoomOut: document.querySelector("#mapZoomOut"),
+  mapZoomReset: document.querySelector("#mapZoomReset"),
+  mapZoomLevel: document.querySelector("#mapZoomLevel"),
   onlineMap: document.querySelector("#onlineMap"),
   radarImage: document.querySelector("#radarImage"),
   stationOverlay: document.querySelector("#stationOverlay"),
@@ -62,6 +74,7 @@ let markers = new Map();
 let radarFrames = [];
 let radarHost = "https://tilecache.rainviewer.com";
 let radarFrameIndex = 0;
+let mapZoomLevel = 0;
 let autoRefresh = true;
 let autoRefreshTimer;
 let radarAnimationTimer;
@@ -71,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderOnlineMap();
   initMap();
   bindControls();
+  updateMapZoomControls();
   refreshAll();
   scheduleAutoRefresh();
 });
@@ -95,6 +109,7 @@ function initMap() {
     }, location.name);
     const title = svgEl("title", {}, `${location.name}: loading rainfall data`);
     const marker = { group, circle, label, title, point, report: null };
+    group.toggleAttribute("hidden", !point.visible);
 
     group.append(title, circle, label);
     group.addEventListener("mouseenter", () => showMapTooltip(marker));
@@ -119,6 +134,61 @@ function bindControls() {
     els.radarImage.style.opacity = String(Number(els.radarOpacity.value) / 100);
   });
   els.radarPlayButton.addEventListener("click", toggleRadarAnimation);
+  els.mapZoomIn.addEventListener("click", () => setMapZoom(mapZoomLevel + 1));
+  els.mapZoomOut.addEventListener("click", () => setMapZoom(mapZoomLevel - 1));
+  els.mapZoomReset.addEventListener("click", () => setMapZoom(MAP_ZOOM_MIN));
+  els.map.addEventListener("wheel", handleMapWheel, { passive: false });
+}
+
+function handleMapWheel(event) {
+  if (event.deltaY === 0) {
+    return;
+  }
+
+  event.preventDefault();
+  setMapZoom(mapZoomLevel + (event.deltaY < 0 ? 1 : -1));
+}
+
+function setMapZoom(nextZoomLevel) {
+  const clampedZoom = Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, nextZoomLevel));
+  if (clampedZoom === mapZoomLevel) {
+    return;
+  }
+
+  mapZoomLevel = clampedZoom;
+  renderMapLayers();
+  updateMarkerPositions();
+  updateMapZoomControls();
+  hideMapTooltip();
+}
+
+function renderMapLayers() {
+  renderOnlineMap();
+  const frame = radarFrames[radarFrameIndex];
+  if (frame) {
+    renderRadarTiles(frame);
+  }
+}
+
+function updateMarkerPositions() {
+  LOCATIONS.forEach((location) => {
+    const marker = markers.get(location.name);
+    if (!marker) {
+      return;
+    }
+
+    const point = projectLocation(location);
+    marker.point = point;
+    marker.group.setAttribute("transform", `translate(${point.x} ${point.y})`);
+    marker.group.toggleAttribute("hidden", !point.visible);
+  });
+}
+
+function updateMapZoomControls() {
+  const zoomScale = getMapZoomScale();
+  els.mapZoomLevel.textContent = zoomScale === 1 ? "1x" : `${zoomScale.toFixed(1)}x`;
+  els.mapZoomOut.disabled = mapZoomLevel === MAP_ZOOM_MIN;
+  els.mapZoomIn.disabled = mapZoomLevel === MAP_ZOOM_MAX;
 }
 
 async function refreshAll() {
@@ -567,25 +637,28 @@ function createUnavailableStationCard() {
 }
 
 function renderOnlineMap() {
+  const zoom = getOnlineMapZoom();
   els.onlineMap.replaceChildren(
-    ...createMapTiles(ONLINE_MAP_ZOOM, "map-tile", (x, y) => (
-      `https://tile.openstreetmap.org/${ONLINE_MAP_ZOOM}/${x}/${y}.png`
+    ...createMapTiles(zoom, "map-tile", (x, y) => (
+      `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`
     ))
   );
 }
 
 function renderRadarTiles(frame) {
+  const zoom = getRadarMapZoom();
   els.radarImage.replaceChildren(
-    ...createMapTiles(RADAR_ZOOM, "radar-tile", (x, y) => (
-      `${radarHost}${frame.path}/${RADAR_TILE_SIZE}/${RADAR_ZOOM}/${x}/${y}/${RADAR_COLOR_SCHEME}/${RADAR_OPTIONS}.png`
+    ...createMapTiles(zoom, "radar-tile", (x, y) => (
+      `${radarHost}${frame.path}/${RADAR_TILE_SIZE}/${zoom}/${x}/${y}/${RADAR_COLOR_SCHEME}/${RADAR_OPTIONS}.png`
     ))
   );
 }
 
 function createMapTiles(zoom, className, getSource) {
-  const projection = getMapProjection(zoom);
-  const northWestTile = lonLatToTile({ lat: MAP_BOUNDS.north, lon: MAP_BOUNDS.west }, zoom);
-  const southEastTile = lonLatToTile({ lat: MAP_BOUNDS.south, lon: MAP_BOUNDS.east }, zoom);
+  const bounds = getCurrentMapBounds();
+  const projection = getMapProjection(bounds, zoom);
+  const northWestTile = lonLatToTile({ lat: bounds.north, lon: bounds.west }, zoom);
+  const southEastTile = lonLatToTile({ lat: bounds.south, lon: bounds.east }, zoom);
   const tiles = [];
 
   for (let y = northWestTile.y; y <= southEastTile.y; y += 1) {
@@ -617,9 +690,9 @@ function positionMapTile(image, tileX, tileY, projection) {
   image.style.height = `calc(${height}% + 1px)`;
 }
 
-function getMapProjection(zoom) {
-  const northWest = lonLatToWorldPixel({ lat: MAP_BOUNDS.north, lon: MAP_BOUNDS.west }, zoom);
-  const southEast = lonLatToWorldPixel({ lat: MAP_BOUNDS.south, lon: MAP_BOUNDS.east }, zoom);
+function getMapProjection(bounds, zoom) {
+  const northWest = lonLatToWorldPixel({ lat: bounds.north, lon: bounds.west }, zoom);
+  const southEast = lonLatToWorldPixel({ lat: bounds.south, lon: bounds.east }, zoom);
 
   return {
     west: northWest.x,
@@ -632,15 +705,41 @@ function getMapProjection(zoom) {
 }
 
 function projectLocation(location) {
-  const projection = getMapProjection(ONLINE_MAP_ZOOM);
-  const point = lonLatToWorldPixel(location, ONLINE_MAP_ZOOM);
+  const projection = getMapProjection(getCurrentMapBounds(), getOnlineMapZoom());
+  const point = lonLatToWorldPixel(location, getOnlineMapZoom());
   const x = ((point.x - projection.west) / projection.width) * MAP_VIEWBOX.width;
   const y = ((point.y - projection.north) / projection.height) * MAP_VIEWBOX.height;
 
   return {
-    x: Math.max(48, Math.min(MAP_VIEWBOX.width - 48, x)),
-    y: Math.max(48, Math.min(MAP_VIEWBOX.height - 48, y))
+    x,
+    y,
+    visible: x >= -80 && x <= MAP_VIEWBOX.width + 80 && y >= -60 && y <= MAP_VIEWBOX.height + 60
   };
+}
+
+function getCurrentMapBounds() {
+  const zoomScale = getMapZoomScale();
+  const latitudeSpan = (DEFAULT_MAP_BOUNDS.north - DEFAULT_MAP_BOUNDS.south) / zoomScale;
+  const longitudeSpan = (DEFAULT_MAP_BOUNDS.east - DEFAULT_MAP_BOUNDS.west) / zoomScale;
+
+  return {
+    north: MAP_CENTER.lat + latitudeSpan / 2,
+    south: MAP_CENTER.lat - latitudeSpan / 2,
+    west: MAP_CENTER.lon - longitudeSpan / 2,
+    east: MAP_CENTER.lon + longitudeSpan / 2
+  };
+}
+
+function getMapZoomScale() {
+  return MAP_ZOOM_FACTOR ** mapZoomLevel;
+}
+
+function getOnlineMapZoom() {
+  return BASE_ONLINE_MAP_ZOOM + mapZoomLevel;
+}
+
+function getRadarMapZoom() {
+  return BASE_RADAR_ZOOM + mapZoomLevel;
 }
 
 function lonLatToTile(location, zoom) {

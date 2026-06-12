@@ -61,6 +61,18 @@
             <svg id="stationOverlay" class="station-overlay" viewBox="0 0 1000 680" aria-label="Rainfall status by location"></svg>
             <div class="map-tooltip" id="mapTooltip" hidden></div>
           </div>
+          <div class="map-zoom-controls" aria-label="Map zoom controls">
+            <button class="icon-button" id="mapZoomIn" type="button" aria-label="Zoom map in" title="Zoom map in">
+              <i data-lucide="plus"></i>
+            </button>
+            <span class="map-zoom-level" id="mapZoomLevel" aria-live="polite">1x</span>
+            <button class="icon-button" id="mapZoomOut" type="button" aria-label="Zoom map out" title="Zoom map out">
+              <i data-lucide="minus"></i>
+            </button>
+            <button class="icon-button" id="mapZoomReset" type="button" aria-label="Reset map zoom" title="Reset map zoom">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+          </div>
           <div class="map-overlay">
             <div>
               <span class="meta-label">Radar frame</span>
@@ -120,7 +132,13 @@
               <span class="meta-label">Outlook</span>
               <h2>Next 12 hours</h2>
             </div>
-            <span id="forecastRange">--</span>
+            <div class="forecast-heading-meta">
+              <div class="chart-legend" aria-label="Rainfall chart legend">
+                <span class="legend-item"><span class="legend-swatch legend-max"></span>Max</span>
+                <span class="legend-item"><span class="legend-swatch legend-avg"></span>Average</span>
+              </div>
+              <span id="forecastRange">--</span>
+            </div>
           </div>
           <div class="chart-wrap">
             <svg id="forecastChart" role="img" aria-label="Average and maximum rainfall forecast chart"></svg>
