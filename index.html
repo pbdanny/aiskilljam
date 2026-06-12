@@ -36,7 +36,7 @@
 
       <main class="dashboard-grid">
         <section class="map-panel" aria-label="Bangkok rainfall radar map">
-          <div id="map" class="rain-map">
+          <div id="map" class="rain-map" tabindex="0" aria-label="Interactive Bangkok rainfall map" title="Drag to pan map">
             <svg class="base-map" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden="true">
               <defs>
                 <pattern id="mapGrid" width="80" height="80" patternUnits="userSpaceOnUse">
@@ -72,6 +72,22 @@
             <button class="icon-button" id="mapZoomReset" type="button" aria-label="Reset map zoom" title="Reset map zoom">
               <i data-lucide="rotate-ccw"></i>
             </button>
+            <div class="map-pan-controls" aria-label="Map pan controls">
+              <span></span>
+              <button class="icon-button" id="mapPanUp" type="button" aria-label="Pan map north" title="Pan map north">
+                <i data-lucide="arrow-up"></i>
+              </button>
+              <span></span>
+              <button class="icon-button" id="mapPanLeft" type="button" aria-label="Pan map west" title="Pan map west">
+                <i data-lucide="arrow-left"></i>
+              </button>
+              <button class="icon-button" id="mapPanDown" type="button" aria-label="Pan map south" title="Pan map south">
+                <i data-lucide="arrow-down"></i>
+              </button>
+              <button class="icon-button" id="mapPanRight" type="button" aria-label="Pan map east" title="Pan map east">
+                <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
           </div>
           <div class="map-overlay">
             <div>

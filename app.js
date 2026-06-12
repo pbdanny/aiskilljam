@@ -23,7 +23,7 @@ const RISK = {
 const AUTO_REFRESH_MS = 10 * 60 * 1000;
 const RADAR_ANIMATION_MS = 700;
 const DEFAULT_MAP_BOUNDS = { north: 14.07, south: 13.55, west: 100.36, east: 100.86 };
-const MAP_CENTER = {
+const DEFAULT_MAP_CENTER = {
   lat: (DEFAULT_MAP_BOUNDS.north + DEFAULT_MAP_BOUNDS.south) / 2,
   lon: (DEFAULT_MAP_BOUNDS.west + DEFAULT_MAP_BOUNDS.east) / 2
 };
@@ -31,6 +31,8 @@ const MAP_VIEWBOX = { width: 1000, height: 680 };
 const MAP_ZOOM_FACTOR = 1.7;
 const MAP_ZOOM_MIN = 0;
 const MAP_ZOOM_MAX = 3;
+const MAP_PAN_BUTTON_FRACTION = 0.24;
+const MAP_COORD_EPSILON = 0.000001;
 const WEB_MERCATOR_TILE_SIZE = 256;
 const BASE_ONLINE_MAP_ZOOM = 11;
 const RADAR_TILE_SIZE = 512;
@@ -52,6 +54,10 @@ const els = {
   mapZoomOut: document.querySelector("#mapZoomOut"),
   mapZoomReset: document.querySelector("#mapZoomReset"),
   mapZoomLevel: document.querySelector("#mapZoomLevel"),
+  mapPanUp: document.querySelector("#mapPanUp"),
+  mapPanDown: document.querySelector("#mapPanDown"),
+  mapPanLeft: document.querySelector("#mapPanLeft"),
+  mapPanRight: document.querySelector("#mapPanRight"),
   onlineMap: document.querySelector("#onlineMap"),
   radarImage: document.querySelector("#radarImage"),
   stationOverlay: document.querySelector("#stationOverlay"),
@@ -75,6 +81,8 @@ let radarFrames = [];
 let radarHost = "https://tilecache.rainviewer.com";
 let radarFrameIndex = 0;
 let mapZoomLevel = 0;
+let mapCenter = { ...DEFAULT_MAP_CENTER };
+let mapPanState;
 let autoRefresh = true;
 let autoRefreshTimer;
 let radarAnimationTimer;
@@ -136,8 +144,75 @@ function bindControls() {
   els.radarPlayButton.addEventListener("click", toggleRadarAnimation);
   els.mapZoomIn.addEventListener("click", () => setMapZoom(mapZoomLevel + 1));
   els.mapZoomOut.addEventListener("click", () => setMapZoom(mapZoomLevel - 1));
-  els.mapZoomReset.addEventListener("click", () => setMapZoom(MAP_ZOOM_MIN));
+  els.mapZoomReset.addEventListener("click", resetMapView);
+  els.mapPanUp.addEventListener("click", () => panMapByViewport(0, -MAP_PAN_BUTTON_FRACTION));
+  els.mapPanDown.addEventListener("click", () => panMapByViewport(0, MAP_PAN_BUTTON_FRACTION));
+  els.mapPanLeft.addEventListener("click", () => panMapByViewport(-MAP_PAN_BUTTON_FRACTION, 0));
+  els.mapPanRight.addEventListener("click", () => panMapByViewport(MAP_PAN_BUTTON_FRACTION, 0));
+  els.map.addEventListener("pointerdown", handleMapPointerDown);
+  els.map.addEventListener("pointermove", handleMapPointerMove);
+  els.map.addEventListener("pointerup", endMapPan);
+  els.map.addEventListener("pointercancel", endMapPan);
+  els.map.addEventListener("keydown", handleMapKeydown);
   els.map.addEventListener("wheel", handleMapWheel, { passive: false });
+}
+
+function handleMapPointerDown(event) {
+  if (event.button !== 0 && event.pointerType !== "touch") {
+    return;
+  }
+
+  const mapRect = els.map.getBoundingClientRect();
+  mapPanState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startCenter: { ...mapCenter },
+    mapWidth: mapRect.width,
+    mapHeight: mapRect.height
+  };
+  els.map.classList.add("is-panning");
+  els.map.setPointerCapture?.(event.pointerId);
+  hideMapTooltip();
+}
+
+function handleMapPointerMove(event) {
+  if (!mapPanState || event.pointerId !== mapPanState.pointerId) {
+    return;
+  }
+
+  event.preventDefault();
+  panMapFromDrag(event.clientX - mapPanState.startX, event.clientY - mapPanState.startY);
+}
+
+function endMapPan(event) {
+  if (!mapPanState || event.pointerId !== mapPanState.pointerId) {
+    return;
+  }
+
+  els.map.releasePointerCapture?.(event.pointerId);
+  els.map.classList.remove("is-panning");
+  mapPanState = undefined;
+}
+
+function handleMapKeydown(event) {
+  const keyActions = {
+    ArrowUp: () => panMapByViewport(0, -MAP_PAN_BUTTON_FRACTION),
+    ArrowDown: () => panMapByViewport(0, MAP_PAN_BUTTON_FRACTION),
+    ArrowLeft: () => panMapByViewport(-MAP_PAN_BUTTON_FRACTION, 0),
+    ArrowRight: () => panMapByViewport(MAP_PAN_BUTTON_FRACTION, 0),
+    "+": () => setMapZoom(mapZoomLevel + 1),
+    "=": () => setMapZoom(mapZoomLevel + 1),
+    "-": () => setMapZoom(mapZoomLevel - 1),
+    "0": resetMapView
+  };
+  const action = keyActions[event.key];
+  if (!action) {
+    return;
+  }
+
+  event.preventDefault();
+  action();
 }
 
 function handleMapWheel(event) {
@@ -151,11 +226,67 @@ function handleMapWheel(event) {
 
 function setMapZoom(nextZoomLevel) {
   const clampedZoom = Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, nextZoomLevel));
-  if (clampedZoom === mapZoomLevel) {
+  const nextCenter = clampMapCenter(mapCenter, clampedZoom);
+  const zoomChanged = clampedZoom !== mapZoomLevel;
+  const centerChanged = hasMapCenterChanged(nextCenter, mapCenter);
+
+  if (!zoomChanged && !centerChanged) {
     return;
   }
 
   mapZoomLevel = clampedZoom;
+  mapCenter = nextCenter;
+  updateMapView();
+}
+
+function resetMapView() {
+  const zoomChanged = mapZoomLevel !== MAP_ZOOM_MIN;
+  const centerChanged = hasMapCenterChanged(mapCenter, DEFAULT_MAP_CENTER);
+  if (!zoomChanged && !centerChanged) {
+    return;
+  }
+
+  mapZoomLevel = MAP_ZOOM_MIN;
+  mapCenter = { ...DEFAULT_MAP_CENTER };
+  updateMapView();
+}
+
+function panMapByViewport(deltaXFraction, deltaYFraction) {
+  const bounds = getCurrentMapBounds();
+  setMapCenter({
+    lat: mapCenter.lat - deltaYFraction * (bounds.north - bounds.south),
+    lon: mapCenter.lon + deltaXFraction * (bounds.east - bounds.west)
+  });
+}
+
+function panMapFromDrag(deltaX, deltaY) {
+  if (!mapPanState) {
+    return;
+  }
+
+  const zoom = getOnlineMapZoom();
+  const startBounds = getMapBoundsForCenter(mapPanState.startCenter, mapZoomLevel);
+  const projection = getMapProjection(startBounds, zoom);
+  const startPoint = lonLatToWorldPixel(mapPanState.startCenter, zoom);
+  const nextPoint = {
+    x: startPoint.x - (deltaX / mapPanState.mapWidth) * projection.width,
+    y: startPoint.y - (deltaY / mapPanState.mapHeight) * projection.height
+  };
+
+  setMapCenter(worldPixelToLonLat(nextPoint, zoom));
+}
+
+function setMapCenter(nextCenter) {
+  const clampedCenter = clampMapCenter(nextCenter);
+  if (!hasMapCenterChanged(clampedCenter, mapCenter)) {
+    return;
+  }
+
+  mapCenter = clampedCenter;
+  updateMapView();
+}
+
+function updateMapView() {
   renderMapLayers();
   updateMarkerPositions();
   updateMapZoomControls();
@@ -186,9 +317,15 @@ function updateMarkerPositions() {
 
 function updateMapZoomControls() {
   const zoomScale = getMapZoomScale();
+  const limits = getMapCenterLimits(mapZoomLevel);
   els.mapZoomLevel.textContent = zoomScale === 1 ? "1x" : `${zoomScale.toFixed(1)}x`;
   els.mapZoomOut.disabled = mapZoomLevel === MAP_ZOOM_MIN;
   els.mapZoomIn.disabled = mapZoomLevel === MAP_ZOOM_MAX;
+  els.mapZoomReset.disabled = mapZoomLevel === MAP_ZOOM_MIN && !hasMapCenterChanged(mapCenter, DEFAULT_MAP_CENTER);
+  els.mapPanUp.disabled = mapCenter.lat >= limits.maxLat - MAP_COORD_EPSILON;
+  els.mapPanDown.disabled = mapCenter.lat <= limits.minLat + MAP_COORD_EPSILON;
+  els.mapPanLeft.disabled = mapCenter.lon <= limits.minLon + MAP_COORD_EPSILON;
+  els.mapPanRight.disabled = mapCenter.lon >= limits.maxLon - MAP_COORD_EPSILON;
 }
 
 async function refreshAll() {
@@ -718,20 +855,50 @@ function projectLocation(location) {
 }
 
 function getCurrentMapBounds() {
-  const zoomScale = getMapZoomScale();
+  return getMapBoundsForCenter(mapCenter, mapZoomLevel);
+}
+
+function getMapBoundsForCenter(center, zoomLevel) {
+  const zoomScale = getMapZoomScale(zoomLevel);
   const latitudeSpan = (DEFAULT_MAP_BOUNDS.north - DEFAULT_MAP_BOUNDS.south) / zoomScale;
   const longitudeSpan = (DEFAULT_MAP_BOUNDS.east - DEFAULT_MAP_BOUNDS.west) / zoomScale;
 
   return {
-    north: MAP_CENTER.lat + latitudeSpan / 2,
-    south: MAP_CENTER.lat - latitudeSpan / 2,
-    west: MAP_CENTER.lon - longitudeSpan / 2,
-    east: MAP_CENTER.lon + longitudeSpan / 2
+    north: center.lat + latitudeSpan / 2,
+    south: center.lat - latitudeSpan / 2,
+    west: center.lon - longitudeSpan / 2,
+    east: center.lon + longitudeSpan / 2
   };
 }
 
-function getMapZoomScale() {
-  return MAP_ZOOM_FACTOR ** mapZoomLevel;
+function getMapCenterLimits(zoomLevel) {
+  const zoomScale = getMapZoomScale(zoomLevel);
+  const latitudeSpan = (DEFAULT_MAP_BOUNDS.north - DEFAULT_MAP_BOUNDS.south) / zoomScale;
+  const longitudeSpan = (DEFAULT_MAP_BOUNDS.east - DEFAULT_MAP_BOUNDS.west) / zoomScale;
+
+  return {
+    minLat: DEFAULT_MAP_BOUNDS.south + latitudeSpan / 2,
+    maxLat: DEFAULT_MAP_BOUNDS.north - latitudeSpan / 2,
+    minLon: DEFAULT_MAP_BOUNDS.west + longitudeSpan / 2,
+    maxLon: DEFAULT_MAP_BOUNDS.east - longitudeSpan / 2
+  };
+}
+
+function clampMapCenter(center, zoomLevel = mapZoomLevel) {
+  const limits = getMapCenterLimits(zoomLevel);
+
+  return {
+    lat: clamp(center.lat, limits.minLat, limits.maxLat),
+    lon: clamp(center.lon, limits.minLon, limits.maxLon)
+  };
+}
+
+function hasMapCenterChanged(a, b) {
+  return Math.abs(a.lat - b.lat) > MAP_COORD_EPSILON || Math.abs(a.lon - b.lon) > MAP_COORD_EPSILON;
+}
+
+function getMapZoomScale(zoomLevel = mapZoomLevel) {
+  return MAP_ZOOM_FACTOR ** zoomLevel;
 }
 
 function getOnlineMapZoom() {
@@ -763,6 +930,24 @@ function lonLatToWorldPixel(location, zoom) {
     x: ((location.lon + 180) / 360) * scale,
     y: (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * scale
   };
+}
+
+function worldPixelToLonLat(point, zoom) {
+  const scale = WEB_MERCATOR_TILE_SIZE * 2 ** zoom;
+  const lon = (point.x / scale) * 360 - 180;
+  const latRadians = Math.atan(Math.sinh(Math.PI * (1 - (2 * point.y) / scale)));
+
+  return {
+    lat: (latRadians * 180) / Math.PI,
+    lon
+  };
+}
+
+function clamp(value, min, max) {
+  if (min > max) {
+    return (min + max) / 2;
+  }
+  return Math.max(min, Math.min(max, value));
 }
 
 function showMapTooltip(marker) {

@@ -209,6 +209,17 @@ h2 {
   height: 100%;
   min-height: 610px;
   z-index: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+#map.is-panning {
+  cursor: grabbing;
+}
+
+#map:focus-visible {
+  outline: 3px solid rgba(36, 131, 143, 0.32);
+  outline-offset: -3px;
 }
 
 .rain-map {
@@ -308,6 +319,10 @@ h2 {
   cursor: pointer;
 }
 
+.rain-map.is-panning .station-marker {
+  cursor: grabbing;
+}
+
 .station-marker circle {
   stroke: #ffffff;
   stroke-width: 4;
@@ -379,6 +394,18 @@ h2 {
   width: 34px;
   height: 34px;
   border-radius: 6px;
+}
+
+.map-zoom-controls > .icon-button,
+.map-zoom-level {
+  justify-self: center;
+}
+
+.map-pan-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 6px;
+  padding-top: 2px;
 }
 
 .map-zoom-level {
