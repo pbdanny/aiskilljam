@@ -205,6 +205,7 @@ h2 {
 }
 
 .base-map,
+.online-map,
 .radar-image,
 .station-overlay {
   position: absolute;
@@ -217,16 +218,39 @@ h2 {
   z-index: 1;
 }
 
-.radar-image {
+.online-map {
   z-index: 2;
-  object-fit: cover;
+  overflow: hidden;
+  background: #dce4e9;
+}
+
+.map-tile,
+.radar-tile {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.map-tile {
+  z-index: 1;
+}
+
+.radar-image {
+  z-index: 3;
+  overflow: hidden;
   opacity: 0.64;
   mix-blend-mode: multiply;
   transition: opacity 160ms ease;
+  pointer-events: none;
+}
+
+.radar-tile {
+  z-index: 1;
 }
 
 .station-overlay {
-  z-index: 3;
+  z-index: 4;
 }
 
 .map-ground {
@@ -551,6 +575,10 @@ h2 {
   color: var(--muted);
   font-size: 0.78rem;
   flex-wrap: wrap;
+}
+
+.source-row a {
+  color: inherit;
 }
 
 .popup-title {

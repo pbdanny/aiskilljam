@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bangkok Heavy Rainfall Dashboard</title>
     <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://tile.openstreetmap.org" />
     <link rel="preconnect" href="https://api.open-meteo.com" />
     <link rel="preconnect" href="https://api.rainviewer.com" />
     <link rel="stylesheet" href="styles.css" />
@@ -55,7 +56,8 @@
               <text x="780" y="322" class="map-label">Min Buri</text>
               <text x="760" y="515" class="map-label">Lat Krabang</text>
             </svg>
-            <img id="radarImage" class="radar-image" alt="" />
+            <div id="onlineMap" class="online-map" aria-hidden="true"></div>
+            <div id="radarImage" class="radar-image" aria-hidden="true"></div>
             <svg id="stationOverlay" class="station-overlay" viewBox="0 0 1000 680" aria-label="Rainfall status by location"></svg>
             <div class="map-tooltip" id="mapTooltip" hidden></div>
           </div>
@@ -128,6 +130,7 @@
 
       <footer class="source-row">
         <span>Open-Meteo forecast model</span>
+        <span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></span>
         <span>RainViewer radar</span>
         <span>Updated automatically every 10 minutes</span>
       </footer>
